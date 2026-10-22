@@ -1,0 +1,63 @@
+name: keep-api-warm
+
+on:
+  schedule:
+    # UTC 23:00 and 00:00–10:59 map to 07:00–18:59 Asia/Manila (UTC+8).
+    # Six runs per hour at minutes 07, 17, 27, 37, 47, and 57.
+    - cron: "7,17,27,37,47,57 23,0-10 * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  ping:
+    name: Ping SentinelOps liveness endpoint
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+
+    steps:
+      - name: Validate and ping liveness endpoint
+        env:
+          URL: ${{ vars.API_HEALTH_URL }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          expected='https://sentinelops-api.onrender.com/api/v1/health/live'
+
+          if [[ -z "${URL:-}" ]]; then
+            echo '::error::Repository variable API_HEALTH_URL is not configured.'
+            exit 1
+          fi
+
+          if [[ "$URL" != "$expected" ]]; then
+            echo '::error::API_HEALTH_URL does not match the approved SentinelOps liveness endpoint.'
+            exit 1
+          fi
+
+          if ! result="$(
+            curl \
+              --fail \
+              --silent \
+              --show-error \
+              --proto '=https' \
+              --tlsv1.2 \
+              --connect-timeout 10 \
+              --max-time 25 \
+              --retry 2 \
+              --retry-delay 5 \
+              --output /dev/null \
+              --write-out '%{http_code} %{time_total}' \
+              "$URL"
+          )"; then
+            echo '::error::SentinelOps liveness request failed after retries.'
+            exit 1
+          fi
+
+          read -r status duration <<< "$result"
+          printf 'HTTP %s in %ss\n' "$status" "$duration"
+
+          if [[ "$status" != '200' ]]; then
+            echo '::error::Expected HTTP 200 from the SentinelOps liveness endpoint.'
+            exit 1
+          fi
