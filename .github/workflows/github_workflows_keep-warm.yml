@@ -23,7 +23,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          expected='https://sentinelops-api.onrender.com/api/v1/health/live'
+          expected='https://sentinelops-a9qi.onrender.com/api/v1/health/ready'
 
           if [[ -z "${URL:-}" ]]; then
             echo '::error::Repository variable API_HEALTH_URL is not configured.'
